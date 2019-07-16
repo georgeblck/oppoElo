@@ -1,0 +1,13 @@
+name: oppoElo
+title: oppoElo
+username:
+account: georgeblck
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1035499
+bundleId: 2238549
+url: https://georgeblck.shinyapps.io/oppoElo/
+when: 1563312508.99036
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|README.md|testing.R
