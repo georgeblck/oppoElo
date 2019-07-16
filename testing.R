@@ -24,24 +24,42 @@ if (local) {
     eloDat$date <- ymd(eloDat$date)
 }
 
-confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 2013])), conference = c(rep("E", 
-    6), "W", "W", "E", "W", "W", "E", rep("W", 3), "E", "E", "W", "W", "E", "W", "E", "E", rep("W", 4), 
-    "E", "W", "E"))
+# Make conference dat
+confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 2013])), conference = c(rep("East", 
+    6), "West", "West", "East", "West", "West", "East", rep("West", 3), "East", "East", "West", "West", "East", "West", "East", "East", rep("West", 4), 
+    "East", "West", "East")) 
 
-# Make Data
-eloNew <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season, team1) %>% summarise_if(is.logical, 
+# Pre-Calc data
+tempElo <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season, team1) %>% summarise_if(is.logical, 
     sum) %>% right_join(eloDat, by = c("season", "team1")) %>% mutate(playoffteam = playoffgame > 0) %>% 
-    filter(season >= 2013) %>% group_by(season, team1) %>% summarise_at(vars(elo1_pre, elo2_pre, playoffteam), 
-    mean) %>% ungroup() %>% left_join(confDat, by = "team1")
+    filter(season >= 2013) %>% left_join(confDat, by = "team1") %>% mutate(playoffgame = !is.na(playoff))
 
-# Filter conf, season and playoffs
-eloNew %>% filter(season %in% 2019) %>% ggplot(aes(x = elo1_pre, y = elo2_pre, label = team1, colour = factor(playoffteam))) + 
-    geom_label_repel(min.segment.length = 0.1, force = 3, box.padding = 0.1, label.padding = 0.1) + geom_point() + 
-    theme_tufte(base_size = 14) + geom_rangeframe(col = "black") + xlab("Average Team Elo") + ylab("Average Opponent Team Elo") + 
+iseason <- 2019
+iconf <- FALSE
+iplayoffs <- FALSE
+
+# Make Data for graphic
+outDat <- tempElo %>% filter(season %in% iseason, playoffgame %in% iplayoffs) %>% group_by(season, team1) %>% summarise_at(vars(elo1_pre, 
+    elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1")
+meanNorms <- outDat %>% group_by(conference) %>% summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup()
+if(iconf == FALSE){
+  meanNorms <- meanNorms %>% summarise_if(is.numeric, mean)
+} 
+
+# Construct Plot
+outPlot <- ggplot(outDat, aes(x = elo1_pre, y = elo2_pre, label = team1, colour = factor(playoffteam))) + 
+  geom_hline(data = meanNorms, aes(yintercept = elo2_pre), linetype = "dotted", col = "grey")+
+  geom_vline(data = meanNorms, aes(xintercept = elo1_pre), linetype = "dotted", col = "grey")+
+    geom_label_repel(min.segment.length = 0.2, force = 3, box.padding = 0.2, label.padding = 0.2) + geom_point() + 
+    theme_tufte(base_size = 15) + geom_rangeframe(col = "black") + xlab("Average Elo of Team") + ylab("Average Elo of opponent Team") + 
     scale_colour_manual("Made Playoffs", guide = guide_legend(reverse = TRUE), breaks = 0:1, values = c("grey30", 
-        "goldenrod1"), labels = c("No", "Yes")) + theme(legend.justification = c(1, 1), legend.position = c(1, 
-    0.5), legend.background = element_rect(fill = "white", size = 0.5, linetype = "dotted"), plot.title = element_text(hjust = 0.5)) + 
-    facet_wrap(~season, strip.position = "top") + ggtitle("Retrospective strength of schedule in the Western Conference")
+        "goldenrod1"), labels = c("No", "Yes")) + theme(legend.justification = c(0, 1), legend.position = c(0.01, 
+    1), legend.background = element_rect( size = 0.5, linetype = "dotted"))  
+if(iconf){
+  outPlot <- outPlot + facet_wrap(~conference, strip.position = "top", scales = "fixed", nrow = 1) 
+}
+print(outPlot)
+
 
 
 
@@ -53,6 +71,11 @@ eloDat %>% filter(is.na(playoff), season >= 2004) %>% group_by(season, team1) %>
     na.rm = TRUE) %>% ungroup() %>% ggplot(aes(x = season, y = elo2_pre)) + geom_point() + geom_line() + 
     theme_minimal() + geom_rangeframe(sides = "l")
 
+# Make Data
+eloNew <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season, team1) %>% summarise_if(is.logical, 
+    sum) %>% right_join(eloDat, by = c("season", "team1")) %>% mutate(playoffteam = playoffgame > 0) %>% 
+    filter(season >= 2013) %>% group_by(season, team1) %>% summarise_at(vars(elo1_pre, elo2_pre, playoffteam), 
+    mean) %>% ungroup() %>% left_join(confDat, by = "team1")
 
 
 
