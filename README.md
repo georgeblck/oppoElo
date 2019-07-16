@@ -1,6 +1,8 @@
 Retrospective strength of schedule in the NBA (shiny app)
 ================
 
+[Here is the shiny app](https://georgeblck.shinyapps.io/oppoElo/)
+
 During the regular season a common measure of a teams remaining strength
 of schedule (SOS) is the combined winning percentage of those opponents.
 [link](http://www.tankathon.com/remaining_schedule_strength). A high
