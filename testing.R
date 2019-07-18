@@ -35,6 +35,19 @@ tempElo <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season,
     sum) %>% right_join(eloDat, by = c("season", "team1")) %>% mutate(playoffteam = playoffgame > 0) %>% 
     filter(season >= 1977) %>% left_join(confDat, by = "team1") %>% mutate(playoffgame = !is.na(playoff))
 
+eloDelta <- tempElo %>% group_by(season, team1) %>% 
+  summarise(oppoMax = max(elo2_pre), oppoMin = min(elo2_pre), ownMax = max(elo1_pre), ownMin = min(elo1_pre)) %>%
+  mutate(oppoDiff = oppoMax - oppoMin, ownDiff = ownMax - ownMin) %>% ungroup()%>%
+  select(team1, season, ownDiff, oppoDiff) 
+
+eloDelta %>% select(-oppoDiff)%>% arrange(-ownDiff) %>% top_n(10, ownDiff) %>% 
+  kable(format = "rst", digits = 1, col.names = c("Team", "Season", "EloDiff"))
+
+eloDelta %>% select(-ownDiff) %>% arrange(-oppoDiff) %>% top_n(10, oppoDiff) %>% 
+  kable(format = "rst", digits = 1, col.names = c("Team", "Season", "EloDiff")) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+
+
 iseason <- c(2019, 2019)
 iconf <- TRUE
 iplayoffs <- FALSE

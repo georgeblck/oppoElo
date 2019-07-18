@@ -58,17 +58,16 @@ ui <- fluidPage(
       
       # Show a plot of the generated distribution
       mainPanel(
-         plotOutput("distPlot"),
+         plotOutput("distPlot", height="auto"),
          width = 10
       )
    )
 )
 
 # Define server logic required to draw a histogram
-server <- function(input, output) {
-   
+server <- function(input, output, session) {
+  
    output$distPlot <- renderPlot({
-     
      iseason <- input$choiceSeason[1]:input$choiceSeason[2]
      
      if(input$choiceCarmelo){
@@ -108,6 +107,8 @@ server <- function(input, output) {
        outPlot <- outPlot + facet_wrap(~conference, strip.position = "top", scales = "fixed", nrow = 1) 
      }
      outPlot
+   }, height = function() {
+     session$clientData$output_distPlot_width/2.2
    })
 }
 

@@ -15,6 +15,9 @@ library(tidyverse)
 library(ggthemes)
 library(lubridate)
 library(ggrepel)
+library(knitr)
+library(kableExtra)
+
 local <- TRUE
 
 # read data
@@ -40,10 +43,10 @@ tempElo <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season,
 
 ```
 
-[Here is the shiny app](https://georgeblck.shinyapps.io/oppoElo/)
+[Link to shiny app](https://georgeblck.shinyapps.io/oppoElo/)
 
 During the regular season a common measure of a teams remaining strength of schedule (SOS) is the combined winning percentage of 
-those opponents. [link](http://www.tankathon.com/remaining_schedule_strength). A high winning percentage means the opponents you still 
+those opponents [(Example)](http://www.tankathon.com/remaining_schedule_strength). A high winning percentage means the opponents you still 
 have to face are probably tough and vice-versa. 
 
 There are two ideas I want to apply in this work that are in a similar vein:
@@ -55,12 +58,15 @@ The first addition is self explanatory and through 538s work very easy to implem
 
 ## Data
 
-* Data since season 1977 (NBA/ABA Merger)
+* All games since 1977 season (NBA/ABA Merger)
+* All taken from 538s Elo database. [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv)
 
 ## Results
 
+### Variation in Opponents Elo
+
 The variation in Opponents Elo is a lot smaller than the general Team Elo (i.e. the strength of teams and not their opponents). 
-That is to be expected as the strength of an opponent can only vary so much through a season.
+That is to be expected as the strength of a team can only vary so much through a season. The highest amount of variation occurs in the 1999 season. As far as I can tell the reason is the strength of the westen conference.
 
 ```{r sd, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% summarise_at(vars(elo1_pre, 
@@ -73,14 +79,52 @@ tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% summarise_at(
     theme_minimal() + geom_rangeframe(sides = "l")+xlab("Season")+ylab("Variation in season-wise Team Elo")
 ```
 
+### Intra-Season Variation in Elo and oppoElo
+
+Let us now look on the highest deviations in terms of Elo in the past NBA.
+
+We see that the 2011 Cavs had the highest difference in their own team Elo. This is due to Lebron James leaving during the offseason of 2010 and subsequent skill loss. The same thing happened to Chicago in 1999 after Michael Jordans second retirement. 
+The opposite happened to the 2008 Boston Celtics: Pierce, Allen & Garnett got them the championsip.
+
+So we see, that big changes in a teams Elo through a season are mainly due to player movements.
+
+```{r delta1, echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+eloDelta <- tempElo %>% group_by(season, team1) %>% 
+  summarise(oppoMax = max(elo2_pre), oppoMin = min(elo2_pre), ownMax = max(elo1_pre), ownMin = min(elo1_pre)) %>%
+  mutate(oppoDiff = oppoMax - oppoMin, ownDiff = ownMax - ownMin) %>% ungroup() 
+
+eloDelta %>% select(team1, season, ownDiff, ownMax, ownMin)%>% arrange(-ownDiff) %>% top_n(10, ownDiff) %>% 
+  kable("latex", digits=0, col.names = c("Team", "Season", "EloDiff", "Highest Elo", "Lowest Elo"), booktabs = T) %>% 
+  kable_styling(latex_options = "striped") %>%
+  row_spec(1:3, color ="red") %>% as_image(width = 4)
+```
+
+Now if we look at variation in opponents team Elo there is not such a clear picture. Portland faced both the Warriors at their Elo apex and the pre-processed 76ers in 2016. Most of the other outliers are due to the GSW or Michael Jordan.
+
+```{r delta2, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+eloDelta %>% select(team1, season, oppoDiff, oppoMax, oppoMin)%>% arrange(-oppoDiff) %>% top_n(10, oppoDiff) %>% 
+  kable("latex", digits=0, col.names = c("Team", "Season", "EloDiff", "Highest Oppo Elo", "Lowest Oppo Elo"), booktabs = TRUE) %>% 
+  kable_styling(latex_options = "striped") %>% row_spec(1, color ="red") %>% as_image(width = 4)
+```
+
+### Increased variation in seasonal performance
+
+There actually seems to be an increase in seasonal variation per team elo.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+eloDelta %>% group_by(season) %>% summarise_at(vars(ownDiff),mean)%>%ggplot(aes(x=season,y=ownDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in Team Elo (Max-Min)")
+
+eloDelta %>% group_by(season) %>% summarise_at(vars(oppoDiff),mean)%>%ggplot(aes(x=season,y=oppoDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in oppo Team Elo (Max-Min)")
+```
+
 
 ## To-Do
 
 * [x] Upload shiny to shinyapps.io
-* [x] Add more seasons (by solving conferences )
+* [ ] Add more seasons (by solving conferences, use elo website )
 * [x] Add carmElo for the recent seasons (via button)
-* [ ] Make the graphic bigger in browser
-* [ ] Look into the max/min delta a team can undergo in a season
+* [x] Make the graphic bigger in browser
+* [x] Look into the max/min delta a team can undergo in a season
 * [x] Visualize the variation in oppoElo and teamElo
 * [x] Make multiple seasons selectable
 * [ ] Replace team names if it's only name change
