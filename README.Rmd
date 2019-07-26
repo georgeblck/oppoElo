@@ -17,7 +17,8 @@ library(lubridate)
 library(ggrepel)
 library(knitr)
 library(kableExtra)
-
+library(patchwork)
+library(stringi)
 local <- TRUE
 
 # read data
@@ -29,6 +30,12 @@ if (local) {
     eloDat <- read.table(url538, header = TRUE, sep = ",", dec = ".", na.strings = "")
     eloDat$date <- ymd(eloDat$date)
 }
+# Double the data
+eloDatRe <- eloDat
+colnames(eloDatRe) <- stri_replace_all_fixed(colnames(eloDatRe),
+     c(1,2), c(2,1), mode = "first")
+eloList <- list(eloDat, eloDatRe)
+eloDat <- data.table::rbindlist(eloList, use.names=TRUE, idcol=TRUE)
 
 # Make conference dat
 confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 1977])), conference = c(rep("East", 
@@ -54,12 +61,13 @@ There are two ideas I want to apply in this work that are in a similar vein:
 1. Substitute the winning percentage with a more adequate measure of performance: the Elo score.
 2. Instead of a *remaining* SOS, calculate a *retrospective* SOS.
 
-The first addition is self explanatory and through 538s work very easy to implement. The latter idea 
+The first addition is self explanatory and through 538s great work very easy to implement. The latter idea stems from my interest in questions like
 
-## Data
+* Who had the hardest or easiest season in 2019?
+* Who had the hardest or easiest season *ever*?
+* Who had the hardest playoff run ever?
 
-* All games since 1977 season (NBA/ABA Merger)
-* All taken from 538s Elo database. [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv)
+All of these results depend on there being some amount of variation in opponents team strength (measured via elo). This is why it is important to first look at this variation.
 
 ## Results
 
@@ -81,12 +89,12 @@ tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% summarise_at(
 
 ### Intra-Season Variation in Elo and oppoElo
 
-Let us now look on the highest deviations in terms of Elo in the past NBA.
+Let us now look on the highest deviations in terms of Elo in the past NBA throught a single season.
 
 We see that the 2011 Cavs had the highest difference in their own team Elo. This is due to Lebron James leaving during the offseason of 2010 and subsequent skill loss. The same thing happened to Chicago in 1999 after Michael Jordans second retirement. 
 The opposite happened to the 2008 Boston Celtics: Pierce, Allen & Garnett got them the championsip.
 
-So we see, that big changes in a teams Elo through a season are mainly due to player movements.
+Summing up: Big changes in a teams Elo through a season are mainly due to player movements.
 
 ```{r delta1, echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
 eloDelta <- tempElo %>% group_by(season, team1) %>% 
@@ -96,36 +104,102 @@ eloDelta <- tempElo %>% group_by(season, team1) %>%
 eloDelta %>% select(team1, season, ownDiff, ownMax, ownMin)%>% arrange(-ownDiff) %>% top_n(10, ownDiff) %>% 
   kable("latex", digits=0, col.names = c("Team", "Season", "EloDiff", "Highest Elo", "Lowest Elo"), booktabs = T) %>% 
   kable_styling(latex_options = "striped") %>%
-  row_spec(1:3, color ="red") %>% as_image(width = 4)
+  row_spec(1:3, color ="red") %>% as_image(width = 4, file = "README_files/figure-gfm/teamdelta.png")
 ```
 
-Now if we look at variation in opponents team Elo there is not such a clear picture. Portland faced both the Warriors at their Elo apex and the pre-processed 76ers in 2016. Most of the other outliers are due to the GSW or Michael Jordan.
+Opponents Elo is not as informative:
+Portland faced both the Warriors at their Elo apex and the pre-processed 76ers in 2016. Most of the other outliers are due to either GSW or Michael Jordan.
 
 ```{r delta2, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 eloDelta %>% select(team1, season, oppoDiff, oppoMax, oppoMin)%>% arrange(-oppoDiff) %>% top_n(10, oppoDiff) %>% 
   kable("latex", digits=0, col.names = c("Team", "Season", "EloDiff", "Highest Oppo Elo", "Lowest Oppo Elo"), booktabs = TRUE) %>% 
-  kable_styling(latex_options = "striped") %>% row_spec(1, color ="red") %>% as_image(width = 4)
+  kable_styling(latex_options = "striped") %>% row_spec(1, color ="red") %>% as_image(width = 4, file = "README_files/figure-gfm/oppodelta.png")
 ```
 
 ### Increased variation in seasonal performance
 
-There actually seems to be an increase in seasonal variation per team elo.
+There seems to be an increase in seasonal variation per team elo.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 eloDelta %>% group_by(season) %>% summarise_at(vars(ownDiff),mean)%>%ggplot(aes(x=season,y=ownDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in Team Elo (Max-Min)")
 
 eloDelta %>% group_by(season) %>% summarise_at(vars(oppoDiff),mean)%>%ggplot(aes(x=season,y=oppoDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in oppo Team Elo (Max-Min)")
+
 ```
 
+### Who had the hardest season/playoff run?
+
+
+
+```{r hardestseason, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+kDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+       summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+  group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
+  arrange(-elo2_pre) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes"))) %>% top_n(10, elo2_pre) %>%
+  select(-elo1_pre, -elo2_z)
+kDat %>% 
+  kable("latex", digits = 2, col.names = c("Season", "Team", "Avg Oppo Elo", "Reached Playoffs?", "Conference", "Teams relative strength"), booktabs = TRUE, caption = "Top 10 hardest NBA seasons") %>%
+  kable_styling(latex_options = "striped", font_size = 5) %>% row_spec(which(kDat$elo1_z < 0), bold = F, color = "white", background = "red") %>%
+  footnote(general = "Red rows signify teams that were weaker than average in the respective season") %>%
+  as_image(width = 4, file = "README_files/figure-gfm/hardseason.png")
+
+kDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+       summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+  group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
+  arrange(elo2_pre) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes"))) %>% top_n(10, -elo2_pre) %>%
+  select(-elo1_pre, -elo2_z)
+kDat %>% 
+  kable("latex", digits = 2, col.names = c("Season", "Team", "Avg Oppo Elo", "Reached Playoffs?", "Conference", "Teams relative strength"), booktabs = TRUE, caption = "Top 10 easiest NBA seasons") %>%
+  kable_styling(latex_options = "striped", font_size = 5) %>% row_spec(which(kDat$elo1_z < 0), bold = F, color = "white", background = "red") %>%
+  footnote(general = "Red rows signify teams that were weaker than average in the respective season") %>%
+  as_image(width = 4, file = "README_files/figure-gfm/easyseason.png")
+```
+
+The same for playoff runs
+
+```{r hardestplayoff, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+       summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% 
+  group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
+  select(-playoffteam, -elo2_pre , -elo1_pre)
+
+tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoffgames") %>% group_by(season, team1) %>% 
+       summarise_at(vars(elo1_pre, elo2_pre, playoffgames), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+  arrange(-elo2_pre) %>% top_n(10, elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
+  select( -elo1_pre, -elo2_z) %>%  
+  kable("latex", digits = 2, col.names = c("Season", "Team", "Avg Oppo Elo", "#Games", "Conference", "Team strength during season"), booktabs = TRUE,
+        caption = "Top 10 hardest playoff runs") %>%
+  kable_styling(latex_options = "striped", font_size = 5) %>% 
+  as_image(width = 4, file = "README_files/figure-gfm/hardplayoff.png")
+
+tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoffgames") %>% group_by(season, team1) %>% 
+       summarise_at(vars(elo1_pre, elo2_pre, playoffgames), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+  arrange(elo2_pre) %>% top_n(10, -elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
+  select( -elo1_pre, -elo2_z) %>%  
+  kable("latex", digits = 2, col.names = c("Season", "Team", "Avg Oppo Elo", "#Games", "Conference", "Team strength during season"), booktabs = TRUE,
+        caption = "Top 10 easiest playoff runs") %>%
+  kable_styling(latex_options = "striped", font_size = 5) %>% 
+  as_image(width = 4, file = "README_files/figure-gfm/easyplayoff.png")
+
+```
+
+## Data
+
+* All games since 1977 season (NBA/ABA Merger)
+* All taken from 538s Elo database. [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv)
 
 ## To-Do
 
 * [x] Upload shiny to shinyapps.io
-* [ ] Add more seasons (by solving conferences, use elo website )
+* [x] Add more seasons (by solving conferences, use elo website ) (no)
 * [x] Add carmElo for the recent seasons (via button)
 * [x] Make the graphic bigger in browser
 * [x] Look into the max/min delta a team can undergo in a season
 * [x] Visualize the variation in oppoElo and teamElo
 * [x] Make multiple seasons selectable
-* [ ] Replace team names if it's only name change
+* [x] Replace team names if it's only name change (via button)
 * [ ] How similar are the different Elo scores (logreg and visual)
+* [ ] Brush up text.
+* [x] Save table info so it shows up in github
+* [x] carmelo only when looking at single year? (no)
+* [x] Split by season --> who had the hardest season/playoff 

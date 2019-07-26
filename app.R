@@ -8,6 +8,8 @@ library(ggthemes)
 library(lubridate)
 library(ggrepel)
 library(shiny)
+library(stringi)
+
 local <- TRUE
 
 # read data
@@ -19,12 +21,22 @@ if (local) {
   eloDat <- read.table(url538, header = TRUE, sep = ",", dec = ".", na.strings = "")
   eloDat$date <- ymd(eloDat$date)
 }
+# Double the data
+eloDatRe <- eloDat
+colnames(eloDatRe) <- stri_replace_all_fixed(colnames(eloDatRe),
+                                             c(1,2), c(2,1), mode = "first")
+eloList <- list(eloDat, eloDatRe)
+eloDat <- data.table::rbindlist(eloList, use.names=TRUE, idcol=TRUE)
 
 # Make conference dat
 confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 1977])), 
                       conference = c(rep("East", 8), "West", "West", "East", "West", "West", "East", "West", 
                                      rep("West", 3), "East", "East", "West", "East", "East", "West", "West", 
                                      "East", "East", "West", "East", "East", rep("West", 6), "East", "West","West", "East", "East"))
+
+replaceVec <- c("VAN" = "MEM", "WSB" = "WAS", "SEA" = "OKC", "SDC" = "LAC", "NYN" = "BRK",
+                "NOK" ="NOP", "NJN" = "BRK", "NOJ" = "UTA", "KCK" = "SAC", "BUF" = "LAC",
+                "CHH" = "CHO")
 
 # Pre-Calc data
 tempElo <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season, team1) %>% 
@@ -47,12 +59,14 @@ ui <- fluidPage(
                      value = c(2019,2019),
                      ticks = FALSE,
                      sep = ""),
-         selectInput("choicePlayoffs", "",
+         selectInput("choicePlayoffs", "Choose what to include:",
                      choices = list("Regular Season" = FALSE,
                                     "Playoffs" = TRUE), multiple = TRUE,
                      selected = FALSE),
+         h4("Further options"),
          checkboxInput("choiceConf", "Split by conference", value = TRUE),
          checkboxInput("choiceCarmelo", "Use 538s carmELO when possible (since 2015)", value = FALSE),
+         checkboxInput("choiceHomo", "Unify Franchise Names over the seasons (e.g. WSB to WAS)", value = FALSE),
          width = 2
       ),
       
@@ -77,7 +91,12 @@ server <- function(input, output, session) {
        outDat <- tempElo
      }
      
-     # Make Data for graphic
+     if(input$choiceHomo){
+       outDat <- outDat %>% mutate(team1 = str_replace_all(team1, replaceVec),
+                                   team2 = str_replace_all(team2, replaceVec))
+     }
+     
+    # Make Data for graphic
      outDat <- outDat %>% filter(season %in% iseason, playoffgame %in% input$choicePlayoffs) %>% group_by(team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1")
      meanNorms <- outDat %>% group_by(conference) %>% summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup()
@@ -97,7 +116,7 @@ server <- function(input, output, session) {
          geom_hline(data = meanNorms, aes(yintercept = elo2_pre), linetype = "dotted", col = "grey") + 
          geom_vline(data = meanNorms, aes(xintercept = elo1_pre), linetype = "dotted", col = "grey") + 
          geom_label_repel(min.segment.length = 0.2, force = 3, box.padding = 0.2, label.padding = 0.2) + 
-         geom_point() + theme_tufte(base_size = 15) + geom_rangeframe(col = "black") + xlab("Average Elo of Team") + 
+         geom_point() + theme_tufte(base_size = 17) + geom_rangeframe(col = "black") + xlab("Average Elo of Team") + 
          ylab("Average Elo of opponent Team") + 
          scale_colour_manual("Made Playoffs", guide = guide_legend(reverse = TRUE), breaks = 0:1, 
                              values = c("grey30", "goldenrod1"), labels = c("No", "Yes")) + 

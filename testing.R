@@ -24,6 +24,10 @@ if (local) {
     eloDat$date <- ymd(eloDat$date)
 }
 
+replaceVec <- c("VAN" = "MEM", "WSB" = "WAS", "SEA" = "OKC", "SDC" = "LAC", "NYN" = "BRK",
+                "NOK" ="NOP", "NJN" = "BRK", "NOJ" = "UTA", "KCK" = "SAC", "BUF" = "LAC",
+                "CHH" = "CHO")
+
 # Make conference dat
 confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 1977])), conference = c(rep("East", 
     8), "West", "West", "East", "West", "West", "East", "West", rep("West", 3), "East", "East", "West", 

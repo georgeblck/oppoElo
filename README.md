@@ -16,14 +16,17 @@ vein:
     performance: the Elo score.
 2.  Instead of a *remaining* SOS, calculate a *retrospective* SOS.
 
-The first addition is self explanatory and through 538s work very easy
-to implement. The latter idea
+The first addition is self explanatory and through 538s great work very
+easy to implement. The latter idea stems from my interest in questions
+like
 
-## Data
+  - Who had the hardest or easiest season in 2019?
+  - Who had the hardest or easiest season *ever*?
+  - Who had the hardest playoff run ever?
 
-  - All games since 1977 season (NBA/ABA Merger)
-  - All taken from 538s Elo database.
-    [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv)
+All of these results depend on there being some amount of variation in
+opponents team strength (measured via elo). This is why it is important
+to first look at this variation.
 
 ## Results
 
@@ -40,7 +43,7 @@ far as I can tell the reason is the strength of the westen conference.
 ### Intra-Season Variation in Elo and oppoElo
 
 Let us now look on the highest deviations in terms of Elo in the past
-NBA.
+NBA throught a single season.
 
 We see that the 2011 Cavs had the highest difference in their own team
 Elo. This is due to Lebron James leaving during the offseason of 2010
@@ -48,33 +51,49 @@ and subsequent skill loss. The same thing happened to Chicago in 1999
 after Michael Jordans second retirement. The opposite happened to the
 2008 Boston Celtics: Pierce, Allen & Garnett got them the championsip.
 
-So we see, that big changes in a teams Elo through a season are mainly
-due to player movements.
+Summing up: Big changes in a teams Elo through a season are mainly due
+to player movements.
 
-![](/tmp/RtmpJdLOLB/file474819d1e505.png)<!-- -->
+![](README_files/figure-gfm/teamdelta.png)<!-- -->
 
-Now if we look at variation in opponents team Elo there is not such a
-clear picture. Portland faced both the Warriors at their Elo apex and
-the pre-processed 76ers in 2016. Most of the other outliers are due to
-the GSW or Michael Jordan.
+Opponents Elo is not as informative: Portland faced both the Warriors at
+their Elo apex and the pre-processed 76ers in 2016. Most of the other
+outliers are due to either GSW or Michael Jordan.
 
-![](/tmp/RtmpJdLOLB/file47486890f172.png)<!-- -->
+![](README_files/figure-gfm/oppodelta.png)<!-- -->
 
 ### Increased variation in seasonal performance
 
-There actually seems to be an increase in seasonal variation per team
-elo.
+There seems to be an increase in seasonal variation per team elo.
 
 ![](README_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
+
+### Who had the hardest season/playoff run?
+
+![](README_files/figure-gfm/hardseason.png)<!-- -->![](README_files/figure-gfm/easyseason.png)<!-- -->
+
+The same for playoff runs
+
+![](README_files/figure-gfm/hardplayoff.png)<!-- -->![](README_files/figure-gfm/easyplayoff.png)<!-- -->
+
+## Data
+
+  - All games since 1977 season (NBA/ABA Merger)
+  - All taken from 538s Elo database.
+    [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv)
 
 ## To-Do
 
   - [x] Upload shiny to shinyapps.io
-  - [ ] Add more seasons (by solving conferences, use elo website )
+  - [x] Add more seasons (by solving conferences, use elo website ) (no)
   - [x] Add carmElo for the recent seasons (via button)
   - [x] Make the graphic bigger in browser
   - [x] Look into the max/min delta a team can undergo in a season
   - [x] Visualize the variation in oppoElo and teamElo
   - [x] Make multiple seasons selectable
-  - [ ] Replace team names if it’s only name change
+  - [x] Replace team names if it’s only name change (via button)
   - [ ] How similar are the different Elo scores (logreg and visual)
+  - [ ] Brush up text.
+  - [x] Save table info so it shows up in github
+  - [x] carmelo only when looking at single year? (no)
+  - [x] Split by season –\> who had the hardest season/playoff
