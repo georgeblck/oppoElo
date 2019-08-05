@@ -97,3 +97,6 @@ The same for playoff runs
   - [x] Save table info so it shows up in github
   - [x] carmelo only when looking at single year? (no)
   - [x] Split by season –\> who had the hardest season/playoff
+  - [ ] Add table for searchable hardest/easiest season/playoff run with
+    nice kable-highlights
+  - [ ] Think about doubling and possible problems
