@@ -5,9 +5,9 @@ account: georgeblck
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 1035499
-bundleId: 2260757
+bundleId: 2292873
 url: https://georgeblck.shinyapps.io/oppoElo/
-when: 1563976644.20322
+when: 1565039989.41155
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .RData|README.md|testing.R|README_files/figure-gfm/sd-1.png|README_files/figure-gfm/sd-2.png|README_files/figure-gfm/unnamed-chunk-1-1.png|README_files/figure-gfm/unnamed-chunk-1-2.png
+ignoredFiles: .RData|README.md|README.Rmd|testing.R|README_files

@@ -163,6 +163,9 @@ zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>%
   group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
   select(-playoffteam, -elo2_pre , -elo1_pre)
 
+yo <- tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoffgames") %>% group_by(season, team1) %>%
+  group_by(season, team1) %>% mutate(count = n_distinct(team2)) %>% ungroup()
+
 tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoffgames") %>% group_by(season, team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffgames), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
   arrange(-elo2_pre) %>% top_n(10, elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
@@ -203,5 +206,8 @@ tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoff
 * [x] Save table info so it shows up in github
 * [x] carmelo only when looking at single year? (no)
 * [x] Split by season --> who had the hardest season/playoff 
-* [ ] Add table for searchable hardest/easiest season/playoff run with nice kable-highlights
+* [x] Add table for searchable hardest/easiest season/playoff run with nice kable-highlights
+* [ ] Table: Make oppoElo column fat
+* [ ] Table: filters for double variables to integer or round
+* [ ] Plot: Make labels bigger and change colour scheme to 538
 * [ ] Think about doubling and possible problems 

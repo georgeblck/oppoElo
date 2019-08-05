@@ -9,7 +9,6 @@ library(lubridate)
 library(ggrepel)
 library(shiny)
 library(stringi)
-library(kableExtra)
 
 local <- TRUE
 
@@ -54,19 +53,25 @@ ui <- fluidPage(
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
+        conditionalPanel(condition = "input.tabselected==1",
          sliderInput("choiceSeason",
-                     "Which Seasons to include:",
+                     "Which seasons to include:",
                      min = 1977,
                      max = 2019,
                      value = c(2019,2019),
                      ticks = FALSE,
-                     sep = ""),
-         selectInput("choicePlayoffs", "Choose what to include:",
-                     choices = list("Regular Season" = FALSE,
+                     sep = "")),
+        
+         selectInput("choicePlayoffs", "Which part of season to include:",
+                     choices = list("Regular" = FALSE,
                                     "Playoffs" = TRUE), multiple = TRUE,
                      selected = FALSE),
+        conditionalPanel(condition = "input.tabselected==2",br(),
+                         p("Use custom table filters to change its content."),
+                         strong("Relative Season Strength:"), "z-Transformed average Team Elo of Season. 
+                           E.g. the value 1 = Team was one StDev stronger than the average NBA team"),
          conditionalPanel(condition = "input.tabselected==1",
-         h4("Plot options"),
+         h5("Further options"),
          checkboxInput("choiceConf", "Split by conference", value = TRUE),
          checkboxInput("choiceCarmelo", "Use 538s carmELO when possible (available since 2015)", value = FALSE),
          checkboxInput("choiceHomo", "Unify old Franchise Names (e.g. WSB to WAS)", value = TRUE)),
@@ -85,13 +90,6 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
-  observeEvent(input$tabselected, {
-    if(input$tabselected==2){
-      updateSliderInput(session, "choiceSeason", value = c(1977,2019))
-    } else {
-      updateSliderInput(session, "choiceSeason", value = c(2019,2019))
-    }
-  })
   
    output$distPlot <- renderPlot({
      iseason <- input$choiceSeason[1]:input$choiceSeason[2]
@@ -143,40 +141,46 @@ server <- function(input, output, session) {
    })
    
    output$table <- DT::renderDataTable({
-     iseason <- input$choiceSeason[1]:input$choiceSeason[2]
-     outDat <- tempElo %>% filter(season %in% iseason)
      
      # Get relative performance during season
-     zDat <- outDat %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+     zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% 
        group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
        select(-playoffteam, -elo2_pre , -elo1_pre)
      
      # Make ordered dat
-     tableDat <- outDat %>% filter(playoffgame %in% input$choicePlayoffs) %>% add_count(season, team1, name = "playoffgames") %>% group_by(season, team1) %>% 
-       summarise_at(vars(elo1_pre, elo2_pre, playoffgames, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+     tableDat <- tempElo %>% filter(playoffgame %in% input$choicePlayoffs) %>% add_count(season, team1, name = "playoffgames") %>% 
+       group_by(season, team1) %>% mutate(playoffseries = n_distinct(team2)) %>% ungroup() %>%
+       group_by(season, team1) %>% summarise_at(vars(elo1_pre, elo2_pre, playoffgames, playoffteam, playoffseries), mean) %>% 
+       ungroup() %>% left_join(confDat, by = "team1") %>%
        arrange(-elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
-       select(-elo1_pre, -elo2_z) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes")))
+       select(-elo1_pre, -elo2_z) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes")),
+                                             conference = factor(conference), playoffseries = as.integer(playoffseries), 
+                                             playoffgames = as.integer(playoffgames))
+     
      if(any(input$choicePlayoffs == FALSE)){
-       tableDat <- tableDat %>% select(-playoffgames)
-       colVector <- c("Season", "Team", "Avg Oppo Elo", "Playoffs Reached?",
+       tableDat <- tableDat %>% select(-playoffgames, -playoffseries)
+       colVector <- c("Season", "Team", "Average Elo of Opponent", "Playoffs Reached?",
                       "Conference", "Relative Season Strength")
      } else {
        tableDat <- tableDat %>% select(-playoffteam)
-       colVector <- c("Season", "Team", "Avg Oppo Elo", "Number of Playoff Games",
+       colVector <- c("Season", "Team", "Average Elo of Opponent","#Playoff Games", "#Playoff Series",
                       "Conference", "Relative Season Strength")
      }
      
-     kDat <- tempElo %>% filter(season %in% iseason) %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+     kDat <- tempElo  %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
        group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
        arrange(-elo2_pre) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes"))) %>%
-       select(-elo1_pre, -elo2_z)
-     DT::datatable(tableDat, rownames = FALSE,  options = list(autoWidth = TRUE,searching = FALSE, paging = TRUE),
-                   colnames = colVector) %>%
+       select(-elo1_pre, -elo2_z) 
+     DT::datatable(tableDat,rownames = FALSE, filter = "top",colnames = colVector) %>%
        DT::formatStyle(
          'elo1_z',
          color = DT::styleInterval(0, c('red', 'black'))
+       ) %>% 
+       DT::formatStyle(
+         'elo2_pre',
+         backgroundColor = "lightblue"
        ) %>%
        DT::formatRound(c("elo2_pre",'elo1_z'), digits = 2, interval = 6)
    })

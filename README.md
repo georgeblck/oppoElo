@@ -97,6 +97,9 @@ The same for playoff runs
   - [x] Save table info so it shows up in github
   - [x] carmelo only when looking at single year? (no)
   - [x] Split by season –\> who had the hardest season/playoff
-  - [ ] Add table for searchable hardest/easiest season/playoff run with
+  - [x] Add table for searchable hardest/easiest season/playoff run with
     nice kable-highlights
+  - [ ] Table: Make oppoElo column fat
+  - [ ] Table: filters for double variables to integer or round
+  - [ ] Plot: Make labels bigger and change colour scheme to 538
   - [ ] Think about doubling and possible problems
