@@ -30,6 +30,8 @@ to first look at this variation.
 
 ## Results
 
+![](README_files/figure-gfm/ridges-1.png)<!-- -->![](README_files/figure-gfm/ridges-2.png)<!-- -->
+
 ### Variation in Opponents Elo
 
 The variation in Opponents Elo is a lot smaller than the general Team
@@ -62,12 +64,6 @@ outliers are due to either GSW or Michael Jordan.
 
 ![](README_files/figure-gfm/oppodelta.png)<!-- -->
 
-### Increased variation in seasonal performance
-
-There seems to be an increase in seasonal variation per team elo.
-
-![](README_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
-
 ### Who had the hardest season/playoff run?
 
 ![](README_files/figure-gfm/hardseason.png)<!-- -->![](README_files/figure-gfm/easyseason.png)<!-- -->
@@ -75,6 +71,12 @@ There seems to be an increase in seasonal variation per team elo.
 The same for playoff runs
 
 ![](README_files/figure-gfm/hardplayoff.png)<!-- -->![](README_files/figure-gfm/easyplayoff.png)<!-- -->
+
+### Increased variation in seasonal performance
+
+There seems to be an increase in seasonal variation per team elo.
+
+![](README_files/figure-gfm/unnamed-chunk-1-1.png)<!-- -->![](README_files/figure-gfm/unnamed-chunk-1-2.png)<!-- -->
 
 ## Data
 
@@ -99,7 +101,9 @@ The same for playoff runs
   - [x] Split by season –\> who had the hardest season/playoff
   - [x] Add table for searchable hardest/easiest season/playoff run with
     nice kable-highlights
-  - [ ] Table: Make oppoElo column fat
-  - [ ] Table: filters for double variables to integer or round
-  - [ ] Plot: Make labels bigger and change colour scheme to 538
-  - [ ] Think about doubling and possible problems
+  - [x] Table: Make oppoElo column fat
+  - [x] Table: filters for double variables to integer or round
+  - [x] Plot: Make labels bigger and change colour scheme to 538
+  - [x] Think about doubling and possible problems
+  - [x] Ridge plot for seasons West/East and over decades
+  - [x] Add teams till 1970. Problem with ABA and conferences

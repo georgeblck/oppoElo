@@ -20,6 +20,7 @@ library(kableExtra)
 library(patchwork)
 library(stringi)
 library(ggridges)
+library(viridis)
 
 local <- TRUE
 
@@ -73,6 +74,27 @@ All of these results depend on there being some amount of variation in opponents
 
 ## Results
 
+```{r ridges, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+seasonData <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+  summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+  mutate(semidecade = season - season %% 5)
+
+seasonData %>% filter(season >= 1980) %>%  ggplot( aes(x = elo2_pre, y = factor(semidecade), fill = ..x..)) +
+  geom_density_ridges_gradient(scale = 0.95) +
+  scale_fill_viridis(name = "", option = "C")+
+  xlab("Average Opponent Elo") + ylab("Seasons starting from ...") + theme_tufte(base_size = 15)+facet_wrap(~conference)+
+  theme(legend.position="none")
+
+ggplot( seasonData,aes(x=elo2_pre, y=conference, fill=factor(..quantile..))) +
+  stat_density_ridges(scale = 0.95,
+    geom = "density_ridges_gradient", calc_ecdf = TRUE,
+    quantiles = 4, quantile_lines = TRUE
+  ) +
+  scale_fill_viridis(discrete = TRUE, name = "Quartiles")+theme_tufte(base_size = 15)+xlab("Average Opponent Elo")+
+  ylab("Conference")
+```
+
+
 ### Variation in Opponents Elo
 
 The variation in Opponents Elo is a lot smaller than the general Team Elo (i.e. the strength of teams and not their opponents). 
@@ -118,16 +140,6 @@ eloDelta %>% select(team1, season, oppoDiff, oppoMax, oppoMin)%>% arrange(-oppoD
   kable_styling(latex_options = "striped") %>% row_spec(1, color ="red") %>% as_image(width = 4, file = "README_files/figure-gfm/oppodelta.png")
 ```
 
-### Increased variation in seasonal performance
-
-There seems to be an increase in seasonal variation per team elo.
-
-```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
-eloDelta %>% group_by(season) %>% summarise_at(vars(ownDiff),mean)%>%ggplot(aes(x=season,y=ownDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in Team Elo (Max-Min)")
-
-eloDelta %>% group_by(season) %>% summarise_at(vars(oppoDiff),mean)%>%ggplot(aes(x=season,y=oppoDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in oppo Team Elo (Max-Min)")
-
-```
 
 ### Who had the hardest season/playoff run?
 
@@ -188,6 +200,19 @@ tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoff
 
 ```
 
+
+### Increased variation in seasonal performance
+
+There seems to be an increase in seasonal variation per team elo.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+eloDelta %>% group_by(season) %>% summarise_at(vars(ownDiff),mean)%>%ggplot(aes(x=season,y=ownDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in Team Elo (Max-Min)")
+
+eloDelta %>% group_by(season) %>% summarise_at(vars(oppoDiff),mean)%>%ggplot(aes(x=season,y=oppoDiff))+geom_point()+geom_line()+theme_minimal()+geom_smooth(method = "lm", se = FALSE)+xlab("Season")+ylab("Average Range Difference in oppo Team Elo (Max-Min)")
+
+```
+
+
 ## Data
 
 * All games since 1977 season (NBA/ABA Merger)
@@ -212,5 +237,6 @@ tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoff
 * [x] Table: Make oppoElo column fat
 * [x] Table: filters for double variables to integer or round
 * [x] Plot: Make labels bigger and change colour scheme to 538
-* [ ] Think about doubling and possible problems 
-* [ ] Ridge plot for seasons West/East
+* [x] Think about doubling and possible problems 
+* [x] Ridge plot for seasons West/East and over decades
+* [x] Add teams till 1970. Problem with ABA and conferences
