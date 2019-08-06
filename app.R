@@ -62,16 +62,16 @@ ui <- fluidPage(
                      ticks = FALSE,
                      sep = "")),
         
-         selectInput("choicePlayoffs", "Which part of season to include:",
-                     choices = list("Regular" = FALSE,
-                                    "Playoffs" = TRUE), multiple = TRUE,
-                     selected = FALSE),
-        conditionalPanel(condition = "input.tabselected==2",br(),
+         radioButtons("choicePlayoffs", "Which part of season to include:",
+                     choices = list("Only Regular" = 0,
+                                    "Only Playoffs" = 1,
+                                    "Both" = 2), selected = 0),
+        conditionalPanel(condition = "input.tabselected==2",
                          p("Use custom table filters to change its content."),
-                         strong("Relative Season Strength:"), "z-Transformed average Team Elo of Season. 
-                           E.g. the value 1 = Team was one StDev stronger than the average NBA team"),
+                         strong("Relative Season Strength:"), p("z-Transformed average Team Elo of Season. 
+                           E.g. the value 1 = Team was one StDev stronger than the average NBA team")),
          conditionalPanel(condition = "input.tabselected==1",
-         h5("Further options"),
+         h4("Plot options"),
          checkboxInput("choiceConf", "Split by conference", value = TRUE),
          checkboxInput("choiceCarmelo", "Use 538s carmELO when possible (available since 2015)", value = FALSE),
          checkboxInput("choiceHomo", "Unify old Franchise Names (e.g. WSB to WAS)", value = TRUE)),
@@ -93,7 +93,7 @@ server <- function(input, output, session) {
   
    output$distPlot <- renderPlot({
      iseason <- input$choiceSeason[1]:input$choiceSeason[2]
-     
+     iplayoff <- ifelse(input$choicePlayoffs==0, FALSE, ifelse(input$choicePlayoffs == 1, TRUE, c(TRUE, FALSE)))
      if(input$choiceCarmelo){
        outDat <- tempElo %>% mutate(elo1_pre = ifelse(is.na(carmelo1_pre), ifelse(is.na(carm.elo1_pre), elo1_pre, carm.elo1_pre), carmelo1_pre),
                                      elo1_pre = ifelse(is.na(carmelo2_pre), ifelse(is.na(carm.elo2_pre), elo1_pre, carm.elo2_pre), carmelo2_pre))
@@ -107,7 +107,7 @@ server <- function(input, output, session) {
      }
      
     # Make Data for graphic
-     outDat <- outDat %>% filter(season %in% iseason, playoffgame %in% input$choicePlayoffs) %>% group_by(team1) %>% 
+     outDat <- outDat %>% filter(season %in% iseason, playoffgame %in% iplayoff) %>% group_by(team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1")
      meanNorms <- outDat %>% group_by(conference) %>% summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup()
      if(input$choiceConf == FALSE){
@@ -129,7 +129,7 @@ server <- function(input, output, session) {
          geom_point() + theme_tufte(base_size = 17) + geom_rangeframe(col = "black") + xlab("Average Elo of Team") + 
          ylab("Average Elo of Opponent") + 
          scale_colour_manual("Made Playoffs", guide = guide_legend(reverse = TRUE), breaks = 0:1, 
-                             values = c("grey30", "goldenrod1"), labels = c("No", "Yes")) + 
+                             values = c("grey30", "orange"), labels = c("No", "Yes")) + 
          theme(legend.justification = c(0, 1), legend.position = c(0.01, 1), legend.background = element_rect(size = 0.5, linetype = "dotted"))
      }
      if(input$choiceConf){
@@ -140,25 +140,27 @@ server <- function(input, output, session) {
      session$clientData$output_distPlot_width/2.2
    })
    
+   # Make the table output
    output$table <- DT::renderDataTable({
-     
+     iplayoff <- ifelse(input$choicePlayoffs==0, FALSE, ifelse(input$choicePlayoffs == 1, TRUE, c(TRUE, FALSE)))
      # Get relative performance during season
      zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% 
        group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
        select(-playoffteam, -elo2_pre , -elo1_pre)
      
-     # Make ordered dat
-     tableDat <- tempElo %>% filter(playoffgame %in% input$choicePlayoffs) %>% add_count(season, team1, name = "playoffgames") %>% 
+     # Make Data frame for table
+     tableDat <- tempElo %>% filter(playoffgame %in% iplayoff) %>% add_count(season, team1, name = "playoffgames") %>% 
        group_by(season, team1) %>% mutate(playoffseries = n_distinct(team2)) %>% ungroup() %>%
        group_by(season, team1) %>% summarise_at(vars(elo1_pre, elo2_pre, playoffgames, playoffteam, playoffseries), mean) %>% 
        ungroup() %>% left_join(confDat, by = "team1") %>%
        arrange(-elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
        select(-elo1_pre, -elo2_z) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes")),
                                              conference = factor(conference), playoffseries = as.integer(playoffseries), 
-                                             playoffgames = as.integer(playoffgames))
+                                             playoffgames = as.integer(playoffgames),
+                                             elo2_pre = round(elo2_pre, 3), elo1_z = round(elo1_z, 3))
      
-     if(any(input$choicePlayoffs == FALSE)){
+     if(any(iplayoff == FALSE)){
        tableDat <- tableDat %>% select(-playoffgames, -playoffseries)
        colVector <- c("Season", "Team", "Average Elo of Opponent", "Playoffs Reached?",
                       "Conference", "Relative Season Strength")
@@ -168,11 +170,6 @@ server <- function(input, output, session) {
                       "Conference", "Relative Season Strength")
      }
      
-     kDat <- tempElo  %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
-       summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
-       group_by(season) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
-       arrange(-elo2_pre) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes"))) %>%
-       select(-elo1_pre, -elo2_z) 
      DT::datatable(tableDat,rownames = FALSE, filter = "top",colnames = colVector) %>%
        DT::formatStyle(
          'elo1_z',

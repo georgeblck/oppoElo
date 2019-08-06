@@ -19,6 +19,8 @@ library(knitr)
 library(kableExtra)
 library(patchwork)
 library(stringi)
+library(ggridges)
+
 local <- TRUE
 
 # read data
@@ -207,7 +209,8 @@ tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoff
 * [x] carmelo only when looking at single year? (no)
 * [x] Split by season --> who had the hardest season/playoff 
 * [x] Add table for searchable hardest/easiest season/playoff run with nice kable-highlights
-* [ ] Table: Make oppoElo column fat
-* [ ] Table: filters for double variables to integer or round
-* [ ] Plot: Make labels bigger and change colour scheme to 538
+* [x] Table: Make oppoElo column fat
+* [x] Table: filters for double variables to integer or round
+* [x] Plot: Make labels bigger and change colour scheme to 538
 * [ ] Think about doubling and possible problems 
+* [ ] Ridge plot for seasons West/East
