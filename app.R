@@ -2,7 +2,6 @@ options(scipen = 999)
 options(stringsAsFactors = FALSE)
 
 # load packages
-library(formatR)
 library(tidyverse)
 library(ggthemes)
 library(lubridate)
@@ -37,7 +36,7 @@ confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 1977])),
 
 replaceVec <- c("VAN" = "MEM", "WSB" = "WAS", "SEA" = "OKC", "SDC" = "LAC", "NYN" = "BRK",
                 "NOK" ="NOP", "NJN" = "BRK", "NOJ" = "UTA", "KCK" = "SAC", "BUF" = "LAC",
-                "CHH" = "CHO")
+                "CHH" = "CHO", "DNA" = "DEN", "INA" = "IND")
 
 # Pre-Calc data
 tempElo <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season, team1) %>% 
@@ -73,6 +72,7 @@ ui <- fluidPage(
          conditionalPanel(condition = "input.tabselected==1",
          h4("Plot options"),
          checkboxInput("choiceConf", "Split by conference", value = TRUE),
+         checkboxInput("choiceSplitSeason", "Split by season", value = FALSE),
          checkboxInput("choiceCarmelo", "Use 538s carmELO when possible (available since 2015)", value = FALSE),
          checkboxInput("choiceHomo", "Unify old Franchise Names (e.g. WSB to WAS)", value = TRUE)),
          width = 2
@@ -92,45 +92,66 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
    output$distPlot <- renderPlot({
+     # Render the input information
      iseason <- input$choiceSeason[1]:input$choiceSeason[2]
-     iplayoff <- ifelse(input$choicePlayoffs==0, FALSE, ifelse(input$choicePlayoffs == 1, TRUE, c(TRUE, FALSE)))
+     ifelse(input$choicePlayoffs==0, iplayoff <-FALSE, ifelse(input$choicePlayoffs == 1, iplayoff <-TRUE, iplayoff <- c(TRUE, FALSE)))
+     
+     # If CarmeELO replace Elo
      if(input$choiceCarmelo){
        outDat <- tempElo %>% mutate(elo1_pre = ifelse(is.na(carmelo1_pre), ifelse(is.na(carm.elo1_pre), elo1_pre, carm.elo1_pre), carmelo1_pre),
                                      elo1_pre = ifelse(is.na(carmelo2_pre), ifelse(is.na(carm.elo2_pre), elo1_pre, carm.elo2_pre), carmelo2_pre))
      } else {
        outDat <- tempElo
      }
-     
+     # If franchise names should be homogenized
      if(input$choiceHomo){
        outDat <- outDat %>% mutate(team1 = str_replace_all(team1, replaceVec),
                                    team2 = str_replace_all(team2, replaceVec))
      }
      
     # Make Data for graphic
-     outDat <- outDat %>% filter(season %in% iseason, playoffgame %in% iplayoff) %>% group_by(team1) %>% 
-       summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1")
-     meanNorms <- outDat %>% group_by(conference) %>% summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup()
-     if(input$choiceConf == FALSE){
-       meanNorms <- meanNorms %>% summarise_if(is.numeric, mean)
-     } 
-     
-     # Construct Plot
-     if (length(iseason) > 1) {
-       outPlot <- ggplot(outDat, aes(x = elo1_pre, y = elo2_pre, label = team1)) + 
-         geom_hline(data = meanNorms,aes(yintercept = elo2_pre), linetype = "dotted", col = "grey") + 
-         geom_vline(data = meanNorms, aes(xintercept = elo1_pre), linetype = "dotted", col = "grey") + 
-         geom_label_repel(min.segment.length = 0.2,force = 3, box.padding = 0.2, label.padding = 0.2) + geom_point() + 
-         theme_tufte(base_size = 15) + geom_rangeframe(col = "black") + xlab("Average Elo of Team") + ylab("Average Elo of opponent Team")
+     if(input$choiceSplitSeason == FALSE){
+       outDat <- outDat %>% filter(season %in% iseason, playoffgame %in% iplayoff) %>% group_by(team1) %>% 
+         summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1")
+       meanNorms <- outDat %>% group_by(conference) %>% summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup()
+       if(input$choiceConf == FALSE){
+         meanNorms <- meanNorms %>% summarise_if(is.numeric, mean)
+       } 
+       
+       # Construct Plot
+       if (length(iseason) > 1) {
+         outPlot <- ggplot(outDat, aes(x = elo1_pre, y = elo2_pre, label = team1)) + 
+           geom_hline(data = meanNorms,aes(yintercept = elo2_pre), linetype = "dotted", col = "grey") + 
+           geom_vline(data = meanNorms, aes(xintercept = elo1_pre), linetype = "dotted", col = "grey") + 
+           geom_label_repel(min.segment.length = 0.2,force = 3, box.padding = 0.2, label.padding = 0.2) + geom_point() + 
+           theme_tufte(base_size = 17) + geom_rangeframe(col = "black") + xlab(paste0("Average Elo of Team ", "(", min(iseason), "-", max(iseason), ")"))+ 
+           ylab(paste0("Average Elo of Opponent ", "(", min(iseason), "-", max(iseason), ")"))
+       } else {
+         outPlot <- ggplot(outDat, aes(x = elo1_pre, y = elo2_pre, label = team1, colour = factor(playoffteam))) + 
+           geom_hline(data = meanNorms, aes(yintercept = elo2_pre), linetype = "dotted", col = "grey") + 
+           geom_vline(data = meanNorms, aes(xintercept = elo1_pre), linetype = "dotted", col = "grey") + 
+           geom_label_repel(min.segment.length = 0.2, force = 3, box.padding = 0.2, label.padding = 0.2) + 
+           geom_point() + theme_tufte(base_size = 17) + geom_rangeframe(col = "black") + xlab(paste0("Average Elo of Team (", iseason,")")) + 
+           ylab(paste0("Average Elo of Opponent (", iseason,")")) + 
+           scale_colour_manual("Made Playoffs", guide = guide_legend(reverse = TRUE), breaks = 0:1, 
+                               values = c("grey30", "orange"), labels = c("No", "Yes")) + 
+           theme(legend.justification = c(0, 1), legend.position = c(0.01, 1), legend.background = element_rect(size = 0.5, linetype = "dotted"))
+       }
      } else {
-       outPlot <- ggplot(outDat, aes(x = elo1_pre, y = elo2_pre, label = team1, colour = factor(playoffteam))) + 
-         geom_hline(data = meanNorms, aes(yintercept = elo2_pre), linetype = "dotted", col = "grey") + 
-         geom_vline(data = meanNorms, aes(xintercept = elo1_pre), linetype = "dotted", col = "grey") + 
-         geom_label_repel(min.segment.length = 0.2, force = 3, box.padding = 0.2, label.padding = 0.2) + 
-         geom_point() + theme_tufte(base_size = 17) + geom_rangeframe(col = "black") + xlab("Average Elo of Team") + 
-         ylab("Average Elo of Opponent") + 
+       outDat <- outDat %>% filter(season %in% iseason, playoffgame %in% iplayoff) %>% group_by(season, team1) %>% 
+         summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+         mutate(index = paste0(season, team1))
+       outPlot <- ggplot(outDat, aes(x = elo1_pre, y = elo2_pre, label = index, colour = factor(playoffteam))) + 
+         geom_label() + theme_tufte(base_size = 17) + geom_rangeframe(col = "black") + xlab("Average Elo of Team per Season") + 
+         ylab("Average Elo of Opponent per Season") + 
          scale_colour_manual("Made Playoffs", guide = guide_legend(reverse = TRUE), breaks = 0:1, 
                              values = c("grey30", "orange"), labels = c("No", "Yes")) + 
          theme(legend.justification = c(0, 1), legend.position = c(0.01, 1), legend.background = element_rect(size = 0.5, linetype = "dotted"))
+     }
+     
+     # Remove all legends if only playoffs
+     if(input$choicePlayoffs == 1){
+       outPlot <- outPlot + theme(legend.position="none")
      }
      if(input$choiceConf){
        outPlot <- outPlot + facet_wrap(~conference, strip.position = "top", scales = "fixed", nrow = 1) 
@@ -142,7 +163,7 @@ server <- function(input, output, session) {
    
    # Make the table output
    output$table <- DT::renderDataTable({
-     iplayoff <- ifelse(input$choicePlayoffs==0, FALSE, ifelse(input$choicePlayoffs == 1, TRUE, c(TRUE, FALSE)))
+     ifelse(input$choicePlayoffs==0, iplayoff <-FALSE, ifelse(input$choicePlayoffs == 1, iplayoff <-TRUE, iplayoff <- c(TRUE, FALSE)))
      # Get relative performance during season
      zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% 
