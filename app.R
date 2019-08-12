@@ -99,7 +99,7 @@ server <- function(input, output, session) {
      # If CarmeELO replace Elo
      if(input$choiceCarmelo){
        outDat <- tempElo %>% mutate(elo1_pre = ifelse(is.na(carmelo1_pre), ifelse(is.na(carm.elo1_pre), elo1_pre, carm.elo1_pre), carmelo1_pre),
-                                     elo1_pre = ifelse(is.na(carmelo2_pre), ifelse(is.na(carm.elo2_pre), elo1_pre, carm.elo2_pre), carmelo2_pre))
+                                     elo2_pre = ifelse(is.na(carmelo2_pre), ifelse(is.na(carm.elo2_pre), elo2_pre, carm.elo2_pre), carmelo2_pre))
      } else {
        outDat <- tempElo
      }
