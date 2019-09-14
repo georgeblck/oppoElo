@@ -1,0 +1,267 @@
+---
+title: "Retrospective strength of schedule in the NBA (interactive)"
+author: "Nikolai"
+date: '2019-08-07'
+---
+
+```{r loading, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+options(scipen = 999)
+options(stringsAsFactors = FALSE)
+
+# load packages
+library(tidyverse)
+library(ggthemes)
+library(lubridate)
+library(ggrepel)
+library(stringi)
+library(ggridges)
+library(viridis)
+library(kableExtra)
+library(knitr)
+
+local <- TRUE
+
+# read data
+if (local) {
+  eloDat <- read.table("538elo.csv", header = TRUE, dec = ".", sep = ";")
+  rm(local)
+} else {
+  url538 <- "https://projects.fivethirtyeight.com/nba-model/nba_elo.csv"
+  eloDat <- read.table(url538, header = TRUE, sep = ",", dec = ".", na.strings = "")
+  eloDat$date <- ymd(eloDat$date)
+}
+
+# Double the data
+eloDatRe <- eloDat
+colnames(eloDatRe) <- stri_replace_all_fixed(colnames(eloDatRe),
+                                             c(1,2), c(2,1), mode = "first")
+eloList <- list(eloDat, eloDatRe)
+eloDat <- data.table::rbindlist(eloList, use.names=TRUE, idcol=TRUE)
+# Replace the problematic New Orleans Hornets Season with NOH
+eloDat <- eloDat %>% mutate(team1 = ifelse((team1 == "NOP") & (season %in% 2003:2004), "NOH", team1))%>% 
+  mutate(team2 = ifelse((team2 == "NOP") & (season %in% 2003:2004), "NOH", team2))
+
+# Make conference dat
+confDat <- data.frame(team1 = sort(unique(eloDat$team1[eloDat$season >= 1977])), 
+                      conference = c(rep("East", 8), "West", "West", "East", "West", "West", "East", "West", 
+                                     rep("West", 3), "East", "East", "West", "East","East", "East", "West", "West", 
+                                     "East", "East", "West", "East", "East", rep("West", 6), "East", "West","West", "East", "East"))
+
+replaceVec <- c("VAN" = "MEM", "WSB" = "WAS", "SEA" = "OKC", "SDC" = "LAC", "NYN" = "BRK",
+                "NOK" ="NOP", "NJN" = "BRK", "NOJ" = "UTA", "KCK" = "SAC", "BUF" = "LAC",
+                "CHH" = "CHO", "DNA" = "DEN", "INA" = "IND")
+
+# Pre-Calc data
+tempElo <- eloDat %>% mutate(playoffgame = !is.na(playoff)) %>% group_by(season, team1) %>% 
+  summarise_if(is.logical, sum) %>% right_join(eloDat, by = c("season", "team1")) %>% mutate(playoffteam = playoffgame > 0) %>% 
+  filter(season >= 1977) %>% left_join(confDat, by = "team1") %>% mutate(playoffgame = !is.na(playoff))
+```
+
+# Introduction 
+
+[Link to the interactive App](https://georgeblck.shinyapps.io/oppoElo/){target="_blank"}
+
+During the regular season a common measure of a teams remaining strength of schedule (SOS) is the combined winning percentage of 
+the opponents yet to come [(Example)](http://www.tankathon.com/remaining_schedule_strength){target="_blank"}. A high winning percentage implies the teams you still have to face are probably tough and vice-versa. 
+
+There are two ideas I want to apply in this work:
+
+1. Substitute the winning percentage with a more adequate measure of team strength: the Elo score.
+2. Instead of a **prospective** SOS, calculate a **retrospective** SOS.
+
+The first addition is self explanatory and through 538s great work very easy to implement. The latter idea stems from my interest in questions like
+
+* Who had the hardest or easiest season in 2019?
+* Who had the hardest playoff run ever?
+* Are there differences between the conferences?
+* Who had the luckiest season ever? (in terms of opponent strength)
+
+The goal of this work is not an improved SOS-Value but a statistical glimpse at variation in opponents strength throughout the last four decades of the NBA.
+
+### Data
+
+* Scope: All games since the 1976-77 season (NBA/ABA Merger)
+* Source: 538s Elo database. [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv){target="_blank"}
+
+# What about the variation? 
+
+One important assumption that I make is that the variation in opponents strength - measured through the Elo rating - actually contains meaningfull information and not just random noise. As you can see in the graphic below, the variation in opponents strength is around one order of magnitude smaller than the variation in team strength. Intuitively this makes sense: differences between teams are much more pronounced than differences within a team. 
+
+```{r variation, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% summarise_at(vars(elo1_pre, 
+    elo2_pre), mean) %>% ungroup() %>% group_by(season) %>% summarise_at(vars(elo1_pre, elo2_pre), sd, 
+    na.rm = TRUE) %>% ungroup() %>% gather("type", "elo", -season) %>% ggplot(aes(x = season, y = elo, colour = factor(type))) + 
+  geom_point() + geom_line() + theme_tufte(base_size = 15) + geom_rangeframe(sides = "l")+xlab("Season")+ylab("Variation in Average...")+
+  scale_colour_manual("", values = c("black", "red"), labels = c("Team-Elo", "Opponent Elo"))+
+  theme(legend.position = c(1,0.5), legend.justification = c(1, 0.5))
+```
+
+What reasons could there be for this small variaton in oppoElo-Scores? I can think of two major and one minor source:
+
+* Conferences: If your conference is weaker on average, then you will play more games against weaker opponents and your oppoElo will be lower.
+* Intra-Season Changes: Imagine two teams playing the same opponent; one matchup at the beginning of the season, the other at the end. If the opponent improves steadily throughout the seaon, the second matchup will be harder then the first. (Provided, of course, that the Elo rating accurately reflects the change in performance.)
+* Your own team strength: This is in a similar vein as the conferences. If you are a strong team, meaning you win a lot of games, the increasing difference between your high Elo rating and your opponents low Elo rating will increase the variation.
+
+In the following sections I will analyze - visually and numerically - the first two sources.
+
+## Conferences
+
+Today it is well known, that the West is tougher than the East. Does this also manifest in the oppoElo-Scores? The following visualization shows the distribution of the last 43 seasons per NBA team in terms of Opponent Strength (1170 values total). The West does provide a harder season on average, but it also has a much bigger spread.
+
+```{r ridges, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+seasonData <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+  summarise_at(vars(elo1_pre, elo2_pre), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+  mutate(semidecade = season - season %% 5 )
+
+ggplot(seasonData,aes(x=elo2_pre, y=conference, fill=factor(..quantile..))) +
+  stat_density_ridges(scale = 0.95,
+    geom = "density_ridges_gradient", calc_ecdf = TRUE,
+    quantiles = 4, quantile_lines = TRUE
+  ) +
+  scale_fill_viridis(discrete = TRUE, name = "Quartiles")+theme_tufte(base_size = 15)+xlab("Average Elo of opponents")+
+  ylab("Conference")
+
+seasonData %>% filter(season >= 1980) %>%  ggplot( aes(x = elo2_pre, y = factor(semidecade), fill = ..x..)) +
+  geom_density_ridges_gradient(scale = 0.95) +
+  scale_fill_viridis(name = "", option = "C")+
+  xlab("Average Elo of Opponents") + ylab("Seasons starting from ...") + theme_tufte(base_size = 15)+facet_wrap(~conference)+
+  theme(legend.position="none")+scale_x_continuous(breaks = seq(1470,1530,by=20))
+
+diffDat <- seasonData %>% group_by(season, conference) %>% summarise_at(vars(elo2_pre), mean) %>% ungroup() %>% group_by(season) %>%
+  summarise_at(vars(elo2_pre), diff) %>% mutate(decade = season - season %% 10) %>% group_by(decade) %>% summarise_at(vars(elo2_pre), mean)
+```
+
+There is even a trend over time. In the 1980s, the East was actually a tougher task then the West; by an Elo-Rating of 12.1. In the current decade the tables have turned, and an average season in the West is harder by 12.8. To put these rather small numbers into perspective: it would correspond to facing the Cavs (1345) rather than the Bulls (1333). 
+
+## Intra-Season Changes
+
+So the common sentiment about conference strength is reflected in the oppoElo-scores, even though the differences are small. What about changes throughout a season. Do real life events match up with Elo developments? And how much does an NBA teams performance vary during a season? 
+The following table shows the five teams with the biggest Elo Rating change in one single season.
+
+```{r deltaTable, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+eloDelta <- tempElo %>% group_by(season, team1) %>% 
+  summarise(oppoMax = max(elo2_pre), oppoMin = min(elo2_pre), ownMax = max(elo1_pre), ownMin = min(elo1_pre)) %>%
+  mutate(oppoDiff = oppoMax - oppoMin, ownDiff = ownMax - ownMin) %>% ungroup() 
+
+eloDelta %>% select(team1, season, ownDiff, ownMax, ownMin)%>% arrange(-ownDiff) %>% top_n(5, ownDiff) %>% 
+  mutate(season = paste0(season-1,"-",season))%>%
+  kable(digits=0, col.names = c("Team", "Season", "Difference in Elo", "Highest Elo", "Lowest Elo")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover",  "responsive"))
+```
+
+All of these extreme seasons can be easily exlained:
+
+* Chicago deteriorating after Michael Jordans second retirement
+* Cleveland in free-fall after Lebrons *Decision* to join Miami
+* Boston improving drastically and winning it all after adding Pierce, Allen & Garnett
+* SAS loosing all skill in 1997 just to draft future Hall-of-Famer Tim Duncan and thereby eclipsing their previous success in 1998.
+
+```{r deltaPlot, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+tempElo %>% filter(season %in% c(1997:1999,2008,2011), team1 %in% c("CHI", "CLE", "BOS", "SAS")) %>%
+  mutate(looked = ((team1 == "CHI") & (season == 1999)) |   ((team1 == "CLE") & (season == 2011)) |  ((team1 == "BOS") & (season == 2008)) |  ((team1 == "SAS") & (season %in% 1997:1998))) %>% mutate(date = ymd(date))%>%filter(looked)%>%
+  mutate(team1 = factor(team1, levels = c("BOS", "CHI", "CLE", "SAS"),labels = c("Boston 07-08", "Chicago 98-99 (lockout)", "Cleveland 10-11", "San Antonio 97-99")))%>%
+  ggplot(aes(x = date, y = elo1_pre, colour = team1, shape = playoffgame))+geom_point()+
+  scale_shape_manual(values = c(16,4))+
+  scale_colour_manual(values = c("#008348", "#DA0040", "#750033", "#000000"))+ scale_x_date(date_breaks = "1 months", date_labels = "%m")+ylab("Team Elo")+xlab("Month")+theme_tufte()+theme(legend.position="none")+facet_wrap(~team1, scales="free_x",ncol=2)
+```
+
+On the other side of this coin, we have teams that had very little change throught the a single season. The following table shows the five teams with the least intra-seasonal change (this is not really interesting).
+
+```{r deltaTable2, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+eloDelta <- tempElo %>% group_by(season, team1) %>% 
+  summarise(oppoMax = max(elo2_pre), oppoMin = min(elo2_pre), ownMax = max(elo1_pre), ownMin = min(elo1_pre)) %>%
+  mutate(oppoDiff = oppoMax - oppoMin, ownDiff = ownMax - ownMin) %>% ungroup() 
+
+eloDelta %>% select(team1, season, ownDiff, ownMax, ownMin)%>% arrange(ownDiff) %>% top_n(5, -ownDiff) %>% 
+  mutate(season = paste0(season-1,"-",season))%>%
+  kable(digits=0, col.names = c("Team", "Season", "Difference in Elo", "Highest Elo", "Lowest Elo")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover",  "responsive"))
+```
+
+Looking at the average team-changes over time, we can see that the transformation a team undergoes throught one single season - in terms of Elo rating -  is slowly increasing. In the 1980s it was 127, now it is around 140. Ignoring any real-life scheduling contraints, bad luck could make you face a team at its best (Mavs, 1450) instead of at its worst (Suns, 1306). 
+
+```{r varDelta, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+eloDelta %>% group_by(season) %>% summarise_at(vars(ownDiff),mean) %>%
+  ggplot(aes(x=season,y=ownDiff)) + geom_point() + geom_line() + theme_tufte(base_size = 15) + 
+  geom_smooth(se = FALSE, method = "lm") + xlab("Season") + ylab("Average within-season change")
+diffDelta <- eloDelta %>% group_by(season) %>% summarise_at(vars(ownDiff), mean) %>% ungroup() %>% mutate(decade = season - season %% 10) %>%
+  group_by(decade) %>% summarise_at(vars(ownDiff), mean)
+```
+
+
+## 2012 East: One Special Season
+
+Interestingly, intra-seasonal changes are much higher than differences between conferences. What happens if we take this concept of *scheduling-luck* to the extreme. Which season had the biggest spread of luck and bad luck and how exactly did it manifest?
+
+I present to you, the Eastern Conference of the 2011-2012 season and Miami Heat and Chicago Bulls. 
+
+```{r deltaPlot2, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+tempElo %>% filter(season %in% c(2012), team1 %in% c("CHI", "MIA")) %>% mutate(date = ymd(date))%>%
+  ggplot(aes(x = date, y = elo1_pre, colour = team1))+geom_point(aes(shape=playoffgame))+
+  scale_shape_manual(values = c(16,4))+geom_smooth(alpha=0.2)+
+  scale_colour_manual(values = c("#DA0040","black"))+ scale_x_date(date_breaks = "1 months", date_labels = "%m")+ylab("Team Elo")+xlab("Month")+theme_tufte()+theme(legend.position="none")+facet_wrap(~team1, scales="fixed",ncol=1)
+```
+
+# Season Records
+
+Now that we know causes of variation in oppoElo are linked to real-life developments, let us look at the records for seasons and playoffs in terms of opponent strength. The latter prooves to be a much more interesting endeavour because the length of the regular season averages out any extremes.
+
+## Regular Season
+
+The 2012 Phoenix had the hardest regular season; they were actually an average strength NBA team in that season but could not fight through the ever-tough West to reach the playoffs. The 1999 Rockets had the easiest season but made a quick first-round-exit thanks to the Lakers. Even those two extreme seasons were only separated by an Elo-Score of 62.33; which is the difference between the current Mavs (1450) and Hawks (1389).
+
+```{r hardseason, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
+ summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
+ group_by(season, conference) %>% mutate(elo1_z = as.numeric(scale(elo1_pre)), elo2_z = as.numeric(scale(elo2_pre))) %>% ungroup() %>%
+ select(-playoffteam, -elo2_pre , -elo1_pre, -conference)
+
+# Make Data frame for table
+tableDat <- tempElo %>% filter(is.na(playoff)) %>%
+ group_by(season, team1) %>% summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% 
+ ungroup() %>% left_join(confDat, by = "team1") %>%
+ arrange(-elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
+ select(-elo1_pre, -elo2_z) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes")),
+                                       conference = factor(conference))
+tableDat %>% arrange(-elo2_pre) %>% top_n(5,elo2_pre)%>%
+  kable("html", digits = 2, col.names = c("Season", "Team", "Avg oppoElo", "Playoffs?","Conference", "Team strength during season")) %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+```
+
+```{r easyseason, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+tableDat %>% arrange(elo2_pre) %>% top_n(5,-elo2_pre)%>%
+  kable("html", digits = 2, col.names = c("Season", "Team", "Avg oppoElo", "Playoffs?","Conference", "Team strength during season")) %>% kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>%
+    footnote(general = "Team strength is the standardized average Team-Elo value. E.g 1 meaning the team was one standard deviation stronger than an average team in their conference.", footnote_as_chunk =  TRUE)
+```
+
+
+## Playoffs 
+
+**To exclude outliers only deep playoff runs ending in the finals will be considered in the following analysis.** For customized tables use the Shiny-App.
+
+The 2010 Celtics had the hardest playoff run ever. Through 24 games their average opponent Elo was 1683 which would correspond to the current Raptors (1673). Their path to the NBA finals - as a four-seed - looked like this:
+
+1. First Round: A sweep of DWades Miami Heat
+2. Second Round: A six-game series against LeBrons Cavs
+3. ECF: Another six games against the Magic lead by Peak Dwight
+4. Finals: Bested in a seven game series by Kobe & Paus Lakers
+
+```{r hardplayoff, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+# Make Data frame for table
+tableDat <- tempElo %>% filter(!is.na(playoff)) %>% add_count(season, team1, name = "playoffgames") %>% 
+ group_by(season, team1) %>% mutate(playoffseries = n_distinct(team2)) %>% ungroup() %>%
+ group_by(season, team1) %>% summarise_at(vars(elo1_pre, elo2_pre, playoffgames, playoffteam, playoffseries), mean) %>% 
+ ungroup() %>% left_join(confDat, by = "team1") %>%
+ arrange(-elo2_pre) %>% left_join(zDat, by = c("season", "team1")) %>%
+ select(-elo1_pre, -elo2_z) %>% mutate(playoffteam = factor(playoffteam, levels = 0:1, labels = c("No", "Yes")),
+                                       conference = factor(conference), playoffseries = as.integer(playoffseries), 
+                                       playoffgames = as.integer(playoffgames))
+tableDat %>% filter(playoffseries == 4) %>% arrange(-elo2_pre) %>% select(-playoffteam, -playoffseries) %>% top_n(5,elo2_pre)%>%
+  kable("html", digits = 2, col.names = c("Season", "Team", "Avg oppoElo", "#Games", "Conference", "Team strength during season")) %>%kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+```
+
+On the other side are the 1987 Lakers, led by Magic Johnson, with the smoothest championship run: 18 Games against the equivalent of this seasons Spurs (1563). 
+
+```{r easyplayoff, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+tableDat %>% filter(playoffseries == 4) %>% arrange(elo2_pre) %>% select(-playoffteam, -playoffseries) %>% top_n(5,-elo2_pre)%>%
+  kable("html", digits = 2, col.names = c("Season", "Team", "Avg oppoElo", "#Games", "Conference", "Team strength during season")) %>%kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+```
