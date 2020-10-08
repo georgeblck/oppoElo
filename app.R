@@ -88,7 +88,7 @@ ui <- fluidPage(
                      choices = list("Elo Rating" = 0,"carmELO (2016-2019)" = 1, "Raptor (2019-2020)" = 2), 
                      selected = 0, multiple = FALSE, selectize = FALSE),
          checkboxInput("choiceConf", "Split by conference", value = FALSE),
-         checkboxInput("choiceSplitSeason", "Split by season", value = FALSE),
+         checkboxInput("choiceSplitSeason", "Split by season", value = TRUE),
          #checkboxInput("choiceCarmelo", "Use 538s carmELO when possible (available since 2015)", value = FALSE),
          checkboxInput("choiceHomo", "Unify old Franchise Names (e.g. WSB to WAS)", value = TRUE)),
          width = 2
@@ -213,7 +213,7 @@ server <- function(input, output, session) {
                                              conference = factor(conference), playoffseries = as.integer(playoffseries), 
                                              playoffgames = as.integer(playoffgames),
                                              elo2_pre = round(elo2_pre, 3), elo1_z = round(elo1_z, 3))
-     print(str(tableDat))
+
      if(any(iplayoff == FALSE)){
        tableDat <- tableDat %>% select(-playoffgames, -playoffseries)
        colVector <- c("Season", "Team", "Average Elo of Opponent", "Playoffs Reached?",
