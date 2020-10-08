@@ -218,6 +218,19 @@ eloDelta %>% group_by(season) %>% summarise_at(vars(oppoDiff),mean)%>%ggplot(aes
 * All games since 1977 season (NBA/ABA Merger)
 * All taken from 538s Elo database. [link](https://projects.fivethirtyeight.com/nba-model/nba_elo.csv)
 
+## Update Repo Oct 2020
+
+* [x] Make better menu for choice of Raptor/Elo/Carmelo
+* [x] Make better menu for choice of season/playoff/both
+* [x] Subset data when Carmelo/Raptor is chosen
+* [x] Make legend much bigger
+* [x] Make other text bigger
+* [x] Make axis labels with "strength"
+* [ ] Write more explaining text?
+* [x] Add colour for won finals
+* [x] Update data but dont include 2020 season
+* [x] Add Champion tag to table
+
 ## To-Do
 
 * [x] Upload shiny to shinyapps.io
