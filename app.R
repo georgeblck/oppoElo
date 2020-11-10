@@ -1,6 +1,8 @@
 options(scipen = 999)
 options(stringsAsFactors = FALSE)
 
+# rsconnect::deployApp()
+
 # load packages
 library(tidyverse)
 library(ggthemes)
@@ -111,7 +113,7 @@ server <- function(input, output, session) {
      # Render the input information
      iseason <- input$choiceSeason[1]:input$choiceSeason[2]
      ifelse(input$choicePlayoffs==0, iplayoff <-FALSE, ifelse(input$choicePlayoffs == 1, iplayoff <-TRUE, iplayoff <- c(TRUE, FALSE)))
-     
+     print(iplayoff)
      if(input$choiceCarmelo2 == 2){
         # Choose Raptor
         outDat <- tempElo %>% mutate(elo1_pre = raptor1_pre, elo2_pre = raptor2_pre) %>% filter(season >= 2019)
@@ -196,6 +198,7 @@ server <- function(input, output, session) {
    # Make the table output
    output$table <- DT::renderDataTable({
      ifelse(input$choicePlayoffs==0, iplayoff <-FALSE, ifelse(input$choicePlayoffs == 1, iplayoff <-TRUE, iplayoff <- c(TRUE, FALSE)))
+      
      # Get relative performance during season
      zDat <- tempElo %>% filter(is.na(playoff)) %>% group_by(season, team1) %>% 
        summarise_at(vars(elo1_pre, elo2_pre, playoffteam), mean) %>% ungroup() %>% left_join(confDat, by = "team1") %>%
@@ -213,13 +216,13 @@ server <- function(input, output, session) {
                                              conference = factor(conference), playoffseries = as.integer(playoffseries), 
                                              playoffgames = as.integer(playoffgames),
                                              elo2_pre = round(elo2_pre, 3), elo1_z = round(elo1_z, 3))
-
+     # If playoffs are included: show playoff games and stuff
      if(any(iplayoff == FALSE)){
        tableDat <- tableDat %>% select(-playoffgames, -playoffseries)
        colVector <- c("Season", "Team", "Average Elo of Opponent", "Playoffs Reached?",
                       "Conference", "Relative Season Strength")
      } else {
-       tableDat <- tableDat %>% select(-playoffteam)
+       tableDat <- tableDat %>% select(-playoffteam_v2)
        colVector <- c("Season", "Team", "Average Elo of Opponent","#Playoff Games", "#Playoff Series",
                       "Conference", "Relative Season Strength")
      }
